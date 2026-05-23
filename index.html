@@ -7,11 +7,12 @@
     <title>ШАУРМА ОТ КАРАМАТУЛЛО</title>
     <link rel="stylesheet" href="style.css" />
 
-    <!-- Three.js (рендер в #game-canvas; собственно 3D-сцена пойдёт в game.js) -->
+    <!-- Three.js + addons (рендер в #game-canvas; собственно 3D-сцена в main.js) -->
     <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        "three":         "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
       }
     }
     </script>
@@ -46,7 +47,7 @@
         <p class="game-subtitle">// СПАЛЬНЫЙ РАЙОН / 4 ВЕЧЕРА / 1 ЛАРЁК //</p>
 
         <nav class="menu-buttons">
-            <button class="menu-btn menu-btn--primary" id="btn-play"     type="button">ПОДОЙТИ К ЛАРЬКУ</button>
+            <button class="menu-btn menu-btn--primary" id="start-btn"    type="button">ПОДОЙТИ К ЛАРЬКУ</button>
             <button class="menu-btn"                   id="btn-settings" type="button">НАСТРОЙКИ</button>
             <button class="menu-btn menu-btn--exit"    id="btn-exit"     type="button">СЪЕБАТЬСЯ</button>
         </nav>
@@ -104,46 +105,7 @@
         <img id="jumpscare-img" alt="" />
     </div>
 
-    <!-- =================== БУТСТРАП ИГРЫ =================== -->
-    <script type="module">
-        import { DIALOGS, ANGER } from './dialogs.js';
-
-        // Сюда ниже подтянется game.js с Three.js-сценой.
-        // Здесь — минимальная склейка UI (показать/скрыть слои).
-        const $ = (sel) => document.querySelector(sel);
-
-        const menu      = $('#main-menu');
-        const hud       = $('#hud');
-        const dialogBox = $('#dialog-box');
-        const anger     = $('#anger-meter');
-
-        $('#btn-play').addEventListener('click', () => {
-            menu.classList.add('is-leaving');
-            menu.addEventListener('transitionend', () => {
-                menu.hidden = true;
-                hud.hidden = false;
-                dialogBox.hidden = false;
-                anger.hidden = false;
-                // window.GAME?.startDay(1);  // ← подключит game.js
-            }, { once: true });
-        });
-
-        $('#btn-settings').addEventListener('click', () => {
-            // window.GAME?.openSettings();
-        });
-
-        $('#btn-exit').addEventListener('click', () => {
-            // На вебе window.close() работает только для окон, открытых JS.
-            // Заменяем экран на "пустую кассету".
-            document.body.classList.add('is-rewinding');
-        });
-
-        // Экспортируем диалоги в глобал, чтобы game.js легко достал
-        window.DIALOGS = DIALOGS;
-        window.ANGER   = ANGER;
-    </script>
-
-    <!-- 3D-сцена и игровая логика подключатся отсюда -->
-    <!-- <script type="module" src="game.js"></script> -->
+    <!-- =================== ИГРОВАЯ ЛОГИКА =================== -->
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
