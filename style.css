@@ -1,0 +1,693 @@
+/* ============================================================
+   ШАУРМА ОТ КАРАМАТУЛЛО — UI styles
+   z-index слои:
+     1   — #game-canvas       (3D сцена Three.js)
+     2   — #vhs-overlay       (плёночный шум поверх 3D)
+     10  — .ui-layer          (HUD, диалоги, шкала Гнева)
+     20  — #main-menu         (главное меню)
+     999 — #jumpscare         (скример, перекрывает всё)
+   ============================================================ */
+
+/* ---------- Шрифты ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=VT323&family=Bebas+Neue&display=swap');
+
+/* ---------- Reset / base ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg-deep:        #050000;
+    --blood:          #b80000;
+    --blood-bright:   #ff1a1a;
+    --blood-dark:     #5a0000;
+    --bone:           #e8e3d6;
+    --piss:           #c8b13d;          /* жёлтый фонарь во дворе */
+    --ink:            #0a0a0a;
+    --static:         #1a1a1a;
+
+    --font-display:   'Russo One', 'Bebas Neue', sans-serif;
+    --font-vhs:       'VT323', monospace;
+    --font-body:      'Russo One', sans-serif;
+
+    --ease-snap:      cubic-bezier(.2, .8, .2, 1);
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-deep);
+    color: var(--bone);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: crosshair;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+/* ============================================================
+   3D КАНВАС
+   ============================================================ */
+#game-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    z-index: 1;
+    background: #000;
+}
+
+/* ============================================================
+   VHS / ГЛИТЧ ОВЕРЛЕЙ (поверх 3D, но под UI)
+   ============================================================ */
+#vhs-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    mix-blend-mode: overlay;
+    opacity: .85;
+}
+#vhs-overlay > * { position: absolute; inset: 0; }
+
+.vhs-noise {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    opacity: .18;
+    animation: vhs-noise 0.18s steps(2) infinite;
+}
+
+.vhs-scanlines {
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(0,0,0,0)    0px,
+        rgba(0,0,0,0)    2px,
+        rgba(0,0,0,.35)  3px,
+        rgba(0,0,0,0)    4px
+    );
+    mix-blend-mode: multiply;
+}
+
+.vhs-tracking {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        transparent 92%,
+        rgba(255,255,255,.18) 93%,
+        rgba(0,0,0,.4) 95%,
+        transparent 97%,
+        transparent 100%
+    );
+    animation: vhs-tracking 7s linear infinite;
+    mix-blend-mode: screen;
+}
+
+.vhs-vignette {
+    background: radial-gradient(ellipse at center,
+                transparent 40%,
+                rgba(0,0,0,.55) 80%,
+                rgba(0,0,0,.95) 100%);
+}
+
+@keyframes vhs-noise {
+    0%   { transform: translate(0, 0); }
+    50%  { transform: translate(-4px, 2px); }
+    100% { transform: translate(3px, -1px); }
+}
+@keyframes vhs-tracking {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+}
+
+/* ============================================================
+   UI-СЛОЙ (общий контейнер)
+   ============================================================ */
+.ui-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;        /* пробрасываем клики в 3D, конкретные элементы переопределяют */
+}
+.ui-layer button,
+.ui-layer [role="listbox"],
+.ui-layer a { pointer-events: auto; }
+
+[hidden] { display: none !important; }
+
+/* ============================================================
+   ГЛАВНОЕ МЕНЮ
+   ============================================================ */
+#main-menu {
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(1rem, 3vh, 3rem);
+    padding: 4rem 2rem;
+    background:
+        radial-gradient(ellipse at center, rgba(0,0,0,.45) 0%, rgba(0,0,0,.75) 70%, rgba(0,0,0,.9) 100%);
+    backdrop-filter: blur(2px) saturate(120%);
+    -webkit-backdrop-filter: blur(2px) saturate(120%);
+    transition: opacity .6s var(--ease-snap), filter .6s var(--ease-snap);
+}
+#main-menu.is-leaving {
+    opacity: 0;
+    filter: blur(20px) brightness(.2);
+    pointer-events: none;
+}
+
+/* «Кассетная» полоса сверху */
+.menu-tape {
+    position: absolute;
+    top: 1.2rem;
+    left: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-vhs);
+    font-size: 1.4rem;
+    color: var(--blood-bright);
+    text-shadow: 0 0 6px rgba(255,0,0,.6);
+    letter-spacing: .15em;
+}
+.menu-tape span:first-child {
+    animation: rec-blink 1s steps(2) infinite;
+}
+@keyframes rec-blink { 50% { opacity: .25; } }
+
+/* Заголовок игры */
+.game-title {
+    text-align: center;
+    line-height: .9;
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    color: var(--blood-bright);
+    letter-spacing: .04em;
+    filter: drop-shadow(0 0 20px rgba(255, 0, 0, .35));
+}
+.title-line { display: block; }
+.title-line--top { font-size: clamp(4rem, 14vw, 12rem); }
+.title-line--mid {
+    font-size: clamp(1rem, 2vw, 1.6rem);
+    color: var(--bone);
+    font-family: var(--font-vhs);
+    letter-spacing: .3em;
+    margin: .25em 0;
+    opacity: .65;
+}
+.title-line--bot { font-size: clamp(2.5rem, 8vw, 7rem); }
+
+/* Глитч-эффект на заголовке */
+.title-line--top,
+.title-line--bot {
+    position: relative;
+    text-shadow:
+        0 0 4px rgba(255, 30, 30, .8),
+        0 0 18px rgba(160, 0, 0, .45),
+        2px 0 0 rgba(0, 200, 255, .4),
+       -2px 0 0 rgba(255, 0, 80, .55);
+    animation: title-glitch 4.5s infinite;
+}
+.title-line--top::before,
+.title-line--top::after,
+.title-line--bot::before,
+.title-line--bot::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.title-line--top::before,
+.title-line--bot::before {
+    color: rgba(0, 220, 255, .85);
+    transform: translate(-3px, 0);
+    clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+    mix-blend-mode: screen;
+}
+.title-line--top::after,
+.title-line--bot::after {
+    color: rgba(255, 50, 80, .9);
+    transform: translate(3px, 0);
+    clip-path: polygon(0 66%, 100% 66%, 100% 100%, 0 100%);
+    mix-blend-mode: screen;
+}
+
+@keyframes title-glitch {
+    0%, 92%, 100% { transform: translate(0, 0); }
+    93%           { transform: translate(-3px, 1px) skewX(-2deg); }
+    95%           { transform: translate(2px, -2px) skewX(3deg);  }
+    97%           { transform: translate(-1px, 1px); }
+}
+
+.game-subtitle {
+    font-family: var(--font-vhs);
+    font-size: clamp(.95rem, 1.6vw, 1.4rem);
+    letter-spacing: .25em;
+    color: var(--piss);
+    opacity: .85;
+    text-shadow: 0 0 8px rgba(200, 177, 61, .35);
+}
+
+/* Кнопки меню */
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    width: min(420px, 90vw);
+    margin-top: 1rem;
+}
+.menu-btn {
+    --c: var(--bone);
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 1rem 1.4rem;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    text-transform: uppercase;
+    letter-spacing: .2em;
+    color: var(--c);
+    background: rgba(10, 5, 5, .55);
+    border: 1px solid rgba(232, 227, 214, .25);
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, .4),
+        0 4px 18px rgba(0, 0, 0, .55);
+    transition:
+        background .25s var(--ease-snap),
+        color      .25s var(--ease-snap),
+        transform  .2s  var(--ease-snap),
+        border-color .25s var(--ease-snap),
+        box-shadow .3s var(--ease-snap),
+        letter-spacing .3s var(--ease-snap);
+}
+.menu-btn::before {
+    content: "▸";
+    position: absolute;
+    left: .9rem;
+    top: 50%;
+    transform: translateY(-50%) translateX(-10px);
+    opacity: 0;
+    color: var(--blood-bright);
+    transition: opacity .25s, transform .25s var(--ease-snap);
+}
+.menu-btn:hover,
+.menu-btn:focus-visible {
+    --c: #fff;
+    background: rgba(80, 0, 0, .55);
+    border-color: var(--blood-bright);
+    letter-spacing: .28em;
+    box-shadow:
+        inset 0 0 14px rgba(255, 0, 0, .35),
+        0 0 22px rgba(255, 0, 0, .35),
+        0 8px 24px rgba(0, 0, 0, .7);
+    outline: none;
+}
+.menu-btn:hover::before,
+.menu-btn:focus-visible::before {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+}
+.menu-btn:active { transform: scale(.98); }
+
+.menu-btn--primary {
+    color: #fff;
+    background: linear-gradient(180deg, rgba(184,0,0,.85), rgba(90,0,0,.85));
+    border-color: var(--blood-bright);
+    text-shadow: 0 0 10px rgba(255, 50, 50, .65);
+    box-shadow:
+        inset 0 0 18px rgba(255, 0, 0, .25),
+        0 0 28px rgba(255, 0, 0, .35),
+        0 8px 22px rgba(0, 0, 0, .8);
+}
+.menu-btn--exit { color: #888; font-style: italic; letter-spacing: .15em; }
+.menu-btn--exit:hover { color: var(--blood-bright); font-style: normal; }
+
+/* Подвал меню */
+.menu-footer {
+    position: absolute;
+    bottom: 1.2rem;
+    left: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-vhs);
+    font-size: 1.1rem;
+    color: rgba(232, 227, 214, .55);
+    letter-spacing: .15em;
+}
+
+/* ============================================================
+   ИГРОВОЙ HUD
+   ============================================================ */
+
+/* Прицел */
+.crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 4px;
+    height: 4px;
+    margin: -2px 0 0 -2px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, .65),
+        0 0 6px rgba(255, 255, 255, .35);
+    opacity: .85;
+    transition: transform .15s var(--ease-snap), background .2s, box-shadow .2s;
+}
+.crosshair.is-hot {
+    background: var(--blood-bright);
+    box-shadow:
+        0 0 0 1px #000,
+        0 0 10px rgba(255, 0, 0, .8);
+    transform: scale(1.6);
+}
+
+/* Индикатор подхода (День N/4) */
+.day-indicator {
+    position: absolute;
+    top: 1.2rem;
+    left: 1.5rem;
+    font-family: var(--font-vhs);
+    color: var(--blood-bright);
+    text-shadow: 0 0 8px rgba(255, 0, 0, .45);
+    letter-spacing: .2em;
+    line-height: 1;
+}
+.day-indicator__label {
+    display: block;
+    font-size: .9rem;
+    color: var(--bone);
+    opacity: .65;
+}
+.day-indicator__value {
+    font-size: 1.6rem;
+}
+
+/* ============================================================
+   ШКАЛА ГНЕВА (градусник / кусок мяса)
+   ============================================================ */
+.anger-meter {
+    position: absolute;
+    top: 1.2rem;
+    right: 1.5rem;
+    width: 46px;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    filter: drop-shadow(0 6px 16px rgba(0,0,0,.6));
+    transition: opacity .4s var(--ease-snap), transform .4s var(--ease-snap);
+}
+.anger-meter__label {
+    position: absolute;
+    top: -1.4rem;
+    font-family: var(--font-vhs);
+    font-size: 1rem;
+    letter-spacing: .3em;
+    color: var(--blood-bright);
+    text-shadow: 0 0 6px rgba(255,0,0,.5);
+}
+
+/* «Колба» градусника */
+.anger-meter__tube {
+    position: relative;
+    width: 18px;
+    height: 100%;
+    border-radius: 9px 9px 4px 4px;
+    background:
+        linear-gradient(180deg, rgba(30, 5, 5, .9), rgba(10, 0, 0, .95));
+    border: 1px solid rgba(255, 255, 255, .12);
+    box-shadow:
+        inset 0 0 6px rgba(0, 0, 0, .9),
+        inset 0 0 1px rgba(255, 255, 255, .25);
+    overflow: hidden;
+}
+.anger-meter__fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 0%;
+    background:
+        linear-gradient(180deg,
+            #ff3030 0%,
+            #c40000 40%,
+            #6a0000 100%);
+    box-shadow:
+        inset 0 0 6px rgba(255, 80, 80, .6),
+        inset 0 -6px 12px rgba(0, 0, 0, .5),
+        0 0 12px rgba(255, 0, 0, .35);
+    transition: height .55s var(--ease-snap), filter .3s;
+}
+.anger-meter__veins {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(255,255,255,.12) 0 1px, transparent 2px),
+        radial-gradient(circle at 70% 60%, rgba(0,0,0,.6) 0 1px, transparent 2px);
+    mix-blend-mode: overlay;
+    opacity: .8;
+}
+
+/* «Шарик» градусника снизу — выглядит как кусок сырого мяса */
+.anger-meter__bulb {
+    width: 36px;
+    height: 36px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 35% 30%, #ff5050 0%, #b80000 45%, #4a0000 100%);
+    border: 1px solid rgba(255, 255, 255, .15);
+    box-shadow:
+        inset 0 0 10px rgba(0, 0, 0, .6),
+        inset 0 0 2px rgba(255, 255, 255, .35),
+        0 0 18px rgba(255, 0, 0, .45);
+}
+
+/* Когда фарш почти полный — пульсация */
+.anger-meter.is-critical .anger-meter__fill,
+.anger-meter.is-critical .anger-meter__bulb {
+    animation: anger-pulse .55s ease-in-out infinite alternate;
+}
+@keyframes anger-pulse {
+    from { filter: brightness(1)   saturate(1); }
+    to   { filter: brightness(1.6) saturate(1.4); }
+}
+
+/* ============================================================
+   ДИАЛОГИ (визуальная новелла)
+   ============================================================ */
+#dialog-box {
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    width: min(960px, 92vw);
+    max-height: 42vh;
+    padding: 1.4rem 1.6rem 1.6rem;
+    margin: 0;
+
+    /* Прибиваем к низу через top/left, чтобы не ловить inset от .ui-layer */
+    top: auto;
+    bottom: 2.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+
+    background:
+        linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.85) 100%);
+    backdrop-filter: blur(4px) saturate(140%);
+    -webkit-backdrop-filter: blur(4px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-top: 2px solid var(--blood);
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, .6),
+        0 14px 40px rgba(0, 0, 0, .85),
+        0 0 28px rgba(184, 0, 0, .2);
+
+    pointer-events: auto;
+    animation: dialog-in .35s var(--ease-snap) both;
+}
+@keyframes dialog-in {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+
+.dialog-box__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-family: var(--font-display);
+}
+.dialog-box__name {
+    font-size: 1.35rem;
+    color: var(--blood-bright);
+    text-transform: uppercase;
+    letter-spacing: .15em;
+    text-shadow:
+        0 0 8px rgba(255, 0, 0, .55),
+        0 0 24px rgba(184, 0, 0, .35);
+}
+.dialog-box__divider {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--blood) 0%, transparent 100%);
+}
+.dialog-box__hint {
+    font-family: var(--font-vhs);
+    font-size: 1rem;
+    color: rgba(232, 227, 214, .5);
+    letter-spacing: .2em;
+}
+
+.dialog-box__line {
+    font-family: var(--font-body);
+    font-size: clamp(1.05rem, 1.4vw, 1.3rem);
+    line-height: 1.45;
+    color: var(--bone);
+    min-height: 2.6em;
+    text-shadow: 0 1px 2px rgba(0,0,0,.85);
+}
+.dialog-box__line::after {
+    content: "▌";
+    display: inline-block;
+    margin-left: 4px;
+    color: var(--blood-bright);
+    animation: blink 0.9s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.dialog-box__choices {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .55rem;
+    margin-top: .5rem;
+}
+.dialog-box__choices li { display: block; }
+.dialog-box__choices button {
+    --c: var(--bone);
+    width: 100%;
+    text-align: left;
+    padding: .75rem 1rem .75rem 2.4rem;
+    position: relative;
+    font-size: 1rem;
+    letter-spacing: .03em;
+    color: var(--c);
+    background: rgba(20, 10, 10, .55);
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4);
+    transition:
+        background .2s var(--ease-snap),
+        border-color .2s var(--ease-snap),
+        color .2s,
+        transform .15s var(--ease-snap),
+        box-shadow .25s var(--ease-snap);
+}
+.dialog-box__choices button::before {
+    content: counter(choice, decimal);
+    counter-increment: choice;
+    position: absolute;
+    left: .9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-vhs);
+    color: var(--blood-bright);
+    font-size: 1.1rem;
+    opacity: .85;
+}
+.dialog-box__choices { counter-reset: choice; }
+
+.dialog-box__choices button:hover,
+.dialog-box__choices button:focus-visible {
+    background: rgba(80, 0, 0, .6);
+    border-color: var(--blood-bright);
+    color: #fff;
+    transform: translateX(4px);
+    box-shadow:
+        inset 0 0 0 1px rgba(0,0,0,.4),
+        0 0 18px rgba(255, 0, 0, .25);
+    outline: none;
+}
+
+/* Тон ответов — лёгкая маркировка цветом левой границы */
+.dialog-box__choices button[data-tone="normal"] { border-left: 3px solid #5a8a4a; }
+.dialog-box__choices button[data-tone="troll"]  { border-left: 3px solid var(--piss); }
+.dialog-box__choices button[data-tone="hard"]   { border-left: 3px solid var(--blood-bright); }
+
+/* ============================================================
+   СКРИМЕР
+   ============================================================ */
+#jumpscare {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: #000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+#jumpscare.is-active {
+    display: flex;
+    animation: jumpscare-flash .08s steps(2) 6;
+}
+#jumpscare-img {
+    max-width: 100vw;
+    max-height: 100vh;
+    object-fit: cover;
+    filter: contrast(1.4) saturate(1.3);
+    transform: scale(1.05);
+}
+@keyframes jumpscare-flash {
+    0%, 100% { background: #000; }
+    50%      { background: var(--blood-bright); }
+}
+
+/* ============================================================
+   «Перемотка» при выходе из меню
+   ============================================================ */
+body.is-rewinding::after {
+    content: "PLEASE BE KIND, REWIND";
+    position: fixed;
+    inset: 0;
+    background: #000;
+    color: var(--bone);
+    font-family: var(--font-vhs);
+    font-size: 2rem;
+    letter-spacing: .35em;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: vhs-rewind 1.6s steps(8) forwards;
+}
+@keyframes vhs-rewind {
+    0%   { filter: blur(0)  brightness(1); }
+    100% { filter: blur(8px) brightness(0); }
+}
+
+/* ============================================================
+   Адаптив
+   ============================================================ */
+@media (max-width: 640px) {
+    .anger-meter { width: 36px; height: 160px; right: 1rem; }
+    .anger-meter__bulb { width: 28px; height: 28px; }
+    #dialog-box { bottom: 1rem; padding: 1rem 1rem 1.1rem; }
+    .menu-footer { font-size: .9rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vhs-noise, .vhs-tracking,
+    .title-line--top, .title-line--bot,
+    .menu-tape span:first-child,
+    .dialog-box__line::after,
+    .anger-meter.is-critical .anger-meter__fill,
+    .anger-meter.is-critical .anger-meter__bulb {
+        animation: none !important;
+    }
+}

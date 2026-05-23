@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0000" />
+    <title>ШАУРМА ОТ КАРАМАТУЛЛО</title>
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- Three.js (рендер в #game-canvas; собственно 3D-сцена пойдёт в game.js) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+    </script>
+</head>
+<body>
+
+    <!-- =================== 3D-СЦЕНА (фон, всегда внизу) =================== -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- VHS-шум поверх 3D (мерцает, делает картинку плёночной) -->
+    <div id="vhs-overlay" aria-hidden="true">
+        <div class="vhs-noise"></div>
+        <div class="vhs-scanlines"></div>
+        <div class="vhs-tracking"></div>
+        <div class="vhs-vignette"></div>
+    </div>
+
+    <!-- =================== ГЛАВНОЕ МЕНЮ =================== -->
+    <section id="main-menu" class="ui-layer">
+        <div class="menu-tape" aria-hidden="true">
+            <span>● REC</span>
+            <span class="timecode">00:00:13:04</span>
+            <span>PLAY ▶</span>
+        </div>
+
+        <h1 class="game-title" data-text="ШАУРМА">
+            <span class="title-line title-line--top" data-text="ШАУРМА">ШАУРМА</span>
+            <span class="title-line title-line--mid">от</span>
+            <span class="title-line title-line--bot" data-text="КАРАМАТУЛЛО">КАРАМАТУЛЛО</span>
+        </h1>
+
+        <p class="game-subtitle">// СПАЛЬНЫЙ РАЙОН / 4 ВЕЧЕРА / 1 ЛАРЁК //</p>
+
+        <nav class="menu-buttons">
+            <button class="menu-btn menu-btn--primary" id="btn-play"     type="button">ПОДОЙТИ К ЛАРЬКУ</button>
+            <button class="menu-btn"                   id="btn-settings" type="button">НАСТРОЙКИ</button>
+            <button class="menu-btn menu-btn--exit"    id="btn-exit"     type="button">СЪЕБАТЬСЯ</button>
+        </nav>
+
+        <footer class="menu-footer">
+            <span>v0.4 // PRE-ALPHA</span>
+            <span>18+ // КРОВЬ, МАТ, ПСИХОДЕЛИКА</span>
+        </footer>
+    </section>
+
+    <!-- =================== ИГРОВОЙ HUD =================== -->
+    <section id="hud" class="ui-layer" hidden>
+        <!-- Прицел: маленькая белая точка по центру -->
+        <div class="crosshair" aria-hidden="true"></div>
+
+        <!-- Индикатор подхода (День 1/4) -->
+        <div class="day-indicator" id="day-indicator">
+            <span class="day-indicator__label">ПОДХОД</span>
+            <span class="day-indicator__value" id="day-value">1 / 4</span>
+        </div>
+
+        <!-- Шкала Гнева Караматулло (градусник / кусок мяса) -->
+        <aside id="anger-meter" class="anger-meter" hidden>
+            <div class="anger-meter__label">ГНЕВ</div>
+            <div class="anger-meter__tube">
+                <div class="anger-meter__fill" id="anger-fill" style="height: 0%"></div>
+                <div class="anger-meter__veins" aria-hidden="true"></div>
+            </div>
+            <div class="anger-meter__bulb" aria-hidden="true"></div>
+        </aside>
+    </section>
+
+    <!-- =================== ДИАЛОГИ (визуальная новелла) =================== -->
+    <section id="dialog-box" class="ui-layer" hidden>
+        <header class="dialog-box__header">
+            <span class="dialog-box__name" id="speaker-name">КАРАМАТУЛЛО</span>
+            <span class="dialog-box__divider" aria-hidden="true"></span>
+            <span class="dialog-box__hint">ПРОБЕЛ — ПРОДОЛЖИТЬ</span>
+        </header>
+
+        <p class="dialog-box__line" id="dialog-line">
+            <!-- Текст реплики продавца (печатается посимвольно из JS) -->
+        </p>
+
+        <ul class="dialog-box__choices" id="dialog-choices" role="listbox">
+            <!-- Кнопки 3-х ответов рендерятся из dialogs.js
+                 <li><button data-tone="normal|troll|hard" data-anger="N">текст</button></li>
+            -->
+        </ul>
+    </section>
+
+    <!-- =================== СКРИМЕР =================== -->
+    <div id="jumpscare" aria-hidden="true">
+        <!-- Чёрный div. JS подменяет content / включает звук / показывает картинку -->
+        <img id="jumpscare-img" alt="" />
+    </div>
+
+    <!-- =================== БУТСТРАП ИГРЫ =================== -->
+    <script type="module">
+        import { DIALOGS, ANGER } from './dialogs.js';
+
+        // Сюда ниже подтянется game.js с Three.js-сценой.
+        // Здесь — минимальная склейка UI (показать/скрыть слои).
+        const $ = (sel) => document.querySelector(sel);
+
+        const menu      = $('#main-menu');
+        const hud       = $('#hud');
+        const dialogBox = $('#dialog-box');
+        const anger     = $('#anger-meter');
+
+        $('#btn-play').addEventListener('click', () => {
+            menu.classList.add('is-leaving');
+            menu.addEventListener('transitionend', () => {
+                menu.hidden = true;
+                hud.hidden = false;
+                dialogBox.hidden = false;
+                anger.hidden = false;
+                // window.GAME?.startDay(1);  // ← подключит game.js
+            }, { once: true });
+        });
+
+        $('#btn-settings').addEventListener('click', () => {
+            // window.GAME?.openSettings();
+        });
+
+        $('#btn-exit').addEventListener('click', () => {
+            // На вебе window.close() работает только для окон, открытых JS.
+            // Заменяем экран на "пустую кассету".
+            document.body.classList.add('is-rewinding');
+        });
+
+        // Экспортируем диалоги в глобал, чтобы game.js легко достал
+        window.DIALOGS = DIALOGS;
+        window.ANGER   = ANGER;
+    </script>
+
+    <!-- 3D-сцена и игровая логика подключатся отсюда -->
+    <!-- <script type="module" src="game.js"></script> -->
+</body>
+</html>
