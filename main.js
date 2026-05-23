@@ -147,14 +147,51 @@ kiosk.name = 'Kiosk';
 scene.add(kiosk);
 
 // — корпус ларька (грязный белый сайдинг)
+//   ВАЖНО: раньше корпус был одним сплошным боксом — Караматулло внутри был
+//   невидимым (за стенкой). Теперь собираем «коробку» из отдельных стен и
+//   оставляем переднее окно открытым: игрок видит продавца через окно/прилавок.
 const bodyMat = new THREE.MeshStandardMaterial({
     color: 0xb6b1a3, roughness: 0.85, metalness: 0.05,
 });
-const body = new THREE.Mesh(new THREE.BoxGeometry(4, 2.6, 2.4), bodyMat);
-body.position.y      = 1.3;
-body.castShadow      = true;
-body.receiveShadow   = true;
-kiosk.add(body);
+
+// Задняя стена
+const backWall = new THREE.Mesh(new THREE.BoxGeometry(4, 2.6, 0.12), bodyMat);
+backWall.position.set(0, 1.3, -1.18);
+backWall.castShadow = backWall.receiveShadow = true;
+kiosk.add(backWall);
+
+// Левая и правая боковые стены
+const sideGeo = new THREE.BoxGeometry(0.12, 2.6, 2.4);
+const leftWall  = new THREE.Mesh(sideGeo, bodyMat);
+leftWall.position.set(-1.94, 1.3, 0);
+leftWall.castShadow = leftWall.receiveShadow = true;
+kiosk.add(leftWall);
+
+const rightWall = new THREE.Mesh(sideGeo, bodyMat);
+rightWall.position.set(1.94, 1.3, 0);
+rightWall.castShadow = rightWall.receiveShadow = true;
+kiosk.add(rightWall);
+
+// Передняя «панель под окном» (от пола до прилавка)
+const frontBottom = new THREE.Mesh(new THREE.BoxGeometry(4, 1.0, 0.12), bodyMat);
+frontBottom.position.set(0, 0.5, 1.18);
+frontBottom.castShadow = frontBottom.receiveShadow = true;
+kiosk.add(frontBottom);
+
+// Передняя «панель над окном» (от верха окна до крыши)
+const frontTop = new THREE.Mesh(new THREE.BoxGeometry(4, 0.55, 0.12), bodyMat);
+frontTop.position.set(0, 2.33, 1.18);
+frontTop.castShadow = frontTop.receiveShadow = true;
+kiosk.add(frontTop);
+
+// Пол ларька (чтобы Караматулло не «висел» над землёй на тёмной плоскости)
+const kioskFloor = new THREE.Mesh(
+    new THREE.BoxGeometry(4, 0.08, 2.4),
+    new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.9, metalness: 0.05 })
+);
+kioskFloor.position.set(0, 0.04, 0);
+kioskFloor.receiveShadow = true;
+kiosk.add(kioskFloor);
 
 // — крыша из жести (немного металлическая)
 const roof = new THREE.Mesh(
@@ -300,30 +337,44 @@ function enableShadows(root) {
     });
 }
 
-/** Загрузка House.glb и расстановка нескольких копий по кругу вокруг ларька */
+/** Загрузка House.glb и расстановка копий двумя кольцами вокруг ларька —
+ *  получаем закрытый двор спального района. */
 function spawnHouses(gltfScene) {
-    const COUNT  = 6;
-    const RADIUS = 22;
+    // Нормализуем размер один раз: подгоняем высоту bounding-box к ~12м
+    // (типовая 5-этажка), чтобы модель «многоэтажки» выглядела как
+    // многоэтажка независимо от единиц экспорта.
+    const box      = new THREE.Box3().setFromObject(gltfScene);
+    const size     = box.getSize(new THREE.Vector3());
+    const baseScale = 12 / Math.max(size.y, 0.001);
 
-    // Нормализуем размер: подгоним bounding box к ~12м высоты, чтобы советская
-    // «многоэтажка» выглядела как многоэтажка независимо от того, в каких
-    // единицах была экспортирована модель.
-    const box     = new THREE.Box3().setFromObject(gltfScene);
-    const size    = box.getSize(new THREE.Vector3());
-    const scale   = 12 / Math.max(size.y, 0.001);
+    // Кольца: внутреннее (тесный двор) + внешнее (массив домов «вдалеке»)
+    const rings = [
+        { count: 7,  radius: 20, scale: 1.00, jitter: 0.20 },
+        { count: 11, radius: 36, scale: 1.30, jitter: 0.35 },
+    ];
 
-    for (let i = 0; i < COUNT; i++) {
-        const a = (i / COUNT) * Math.PI * 2 + Math.PI / COUNT;
-        const x = Math.cos(a) * RADIUS;
-        const z = Math.sin(a) * RADIUS;
+    rings.forEach((ring, ringIdx) => {
+        for (let i = 0; i < ring.count; i++) {
+            // Сдвигаем второе кольцо по углу, чтобы дома внешнего кольца
+            // не оказались строго за домами внутреннего (просветы между ними).
+            const phase = ringIdx === 0 ? 0 : Math.PI / ring.count;
+            const a     = (i / ring.count) * Math.PI * 2 + phase;
 
-        const house = gltfScene.clone(true);
-        house.scale.setScalar(scale * (0.9 + Math.random() * 0.25));
-        house.position.set(x, 0, z);
-        house.rotation.y = -a + Math.PI;               // лицом к центру двора
-        enableShadows(house);
-        scene.add(house);
-    }
+            // Небольшой случайный сдвиг радиуса — чтобы линия домов не была
+            // идеально круговой (это «коробки», а не амфитеатр).
+            const r = ring.radius + (Math.random() - 0.5) * 4;
+            const x = Math.cos(a) * r;
+            const z = Math.sin(a) * r;
+
+            const house = gltfScene.clone(true);
+            house.scale.setScalar(baseScale * ring.scale * (1 - ring.jitter * 0.5 + Math.random() * ring.jitter));
+            house.position.set(x, 0, z);
+            // Лицом к центру двора + лёгкий рандомный yaw
+            house.rotation.y = -a + Math.PI + (Math.random() - 0.5) * 0.35;
+            enableShadows(house);
+            scene.add(house);
+        }
+    });
 }
 
 loader.load(
@@ -338,14 +389,21 @@ loader.load(
     (gltf) => {
         karamatulo = gltf.scene;
 
-        // Подгоним рост ~1.75м
-        const box   = new THREE.Box3().setFromObject(karamatulo);
-        const size  = box.getSize(new THREE.Vector3());
-        const scale = 1.75 / Math.max(size.y, 0.001);
+        // Подгоним рост ~1.65м.
+        // ВАЖНО: если модель экспортирована в крошечных единицах (size.y << 1),
+        // частное 1.65 / size.y выдаёт огромный множитель и Караматулло
+        // распирает на полэкрана. Жёстко клампим итоговый scale: вверх не
+        // больше 1.5 (модель уже в реалистичных единицах), вниз не меньше 0.001.
+        const box      = new THREE.Box3().setFromObject(karamatulo);
+        const size     = box.getSize(new THREE.Vector3());
+        const TARGET_H = 1.65;
+        const rawScale = TARGET_H / Math.max(size.y, 0.001);
+        const scale    = THREE.MathUtils.clamp(rawScale, 0.001, 1.5);
         karamatulo.scale.setScalar(scale);
 
-        // Ставим внутри ларька, лицом к окну (к игроку, который стоит на +Z)
-        karamatulo.position.set(0, 0, 0.2);
+        // Ставим в центре ларька, чуть позади окна (z < 0) — игрок видит его
+        // через прилавок. Лицом к +Z (к окну/игроку).
+        karamatulo.position.set(0, 0, -0.25);
         karamatulo.rotation.y = 0;
         karamatulo.name = 'Karamatulo';
 
@@ -373,7 +431,12 @@ loader.load(
  *  ИГРОК / УПРАВЛЕНИЕ
  * ========================================================================== */
 const player = {
-    mode:        'cinematic',   // 'cinematic' | 'fps' | 'dialog'
+    // 'cinematic' — крутимся вокруг ларька (главное меню)
+    // 'cutscene'  — стартовая кат-сцена: «подходим» к ларьку
+    // 'await-lock'— ждём клик пользователя, чтобы запросить pointer-lock
+    // 'fps'       — игровой режим (WASD + мышь)
+    // 'dialog'    — открыт диалог, движение/мышь отключены
+    mode:        'cinematic',
     velocity:    new THREE.Vector3(),
     keys:        Object.create(null),
 };
@@ -396,26 +459,37 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup',   (e) => { player.keys[e.code] = false; });
 
 controls.addEventListener('unlock', () => {
-    // Сняли pointer-lock: если мы не в диалоге, выходим в кинематик
-    if (player.mode === 'fps') player.mode = 'fps-paused';
+    // Pointer-lock снят (Esc, alt-tab и т.п.). Если мы реально играли —
+    // возвращаем экран «КЛИКНИ ЧТОБЫ ИГРАТЬ», иначе следующий controls.lock()
+    // из rAF будет молча проигнорирован браузером (нужен user gesture).
+    if (player.mode === 'fps') {
+        player.mode = 'await-lock';
+        if (dom.clickToPlay) {
+            dom.clickToPlay.querySelector('.ctp-title').textContent = 'ПАУЗА — КЛИКНИ ЧТОБЫ ПРОДОЛЖИТЬ';
+            dom.clickToPlay.hidden = false;
+        }
+    }
 });
 
 /* ============================================================================
  *  HUD / DOM
  * ========================================================================== */
 const dom = {
-    menu:      document.getElementById('main-menu'),
-    hud:       document.getElementById('hud'),
-    dialog:    document.getElementById('dialog-box'),
-    anger:     document.getElementById('anger-meter'),
-    startBtn:  document.getElementById('start-btn'),
-    settings:  document.getElementById('btn-settings'),
-    exit:      document.getElementById('btn-exit'),
-    dayValue:  document.getElementById('day-value'),
-    angerFill: document.getElementById('anger-fill'),
-    speaker:   document.getElementById('speaker-name'),
-    line:      document.getElementById('dialog-line'),
-    choices:   document.getElementById('dialog-choices'),
+    menu:        document.getElementById('main-menu'),
+    hud:         document.getElementById('hud'),
+    dialog:      document.getElementById('dialog-box'),
+    anger:       document.getElementById('anger-meter'),
+    startBtn:    document.getElementById('start-btn'),
+    settings:    document.getElementById('btn-settings'),
+    exit:        document.getElementById('btn-exit'),
+    dayValue:    document.getElementById('day-value'),
+    angerFill:   document.getElementById('anger-fill'),
+    speaker:     document.getElementById('speaker-name'),
+    line:        document.getElementById('dialog-line'),
+    choices:     document.getElementById('dialog-choices'),
+    // Новые: кат-сцена и экран запроса pointer-lock
+    caption:     document.getElementById('cutscene-caption'),
+    clickToPlay: document.getElementById('click-to-play'),
 };
 
 /* ----- Главное меню → переход в FPS ----- */
@@ -429,50 +503,92 @@ dom.settings.addEventListener('click', () => {
     console.log('[ШАУРМА] Settings — TODO');
 });
 
-/* Плавный лерп камеры из кинематика → в SPAWN, затем включаем PointerLock */
+/* ============================================================================
+ *  СТАРТ → КАТ-СЦЕНА «ПОДХОД К ЛАРЬКУ» → CLICK-TO-PLAY → FPS
+ *
+ *  Почему не лочим pointer сразу после лерпа: браузер требует, чтобы
+ *  Element.requestPointerLock() был вызван из активного user gesture
+ *  (handler нажатия кнопки/клика). Лерп длится >1 сек и тикает в rAF —
+ *  user-gesture к моменту окончания уже «протух». Поэтому после кат-сцены
+ *  показываем небольшой оверлей «КЛИКНИ ЧТОБЫ ИГРАТЬ» — клик уже сам по себе
+ *  является user-gesture и lock() гарантированно срабатывает.
+ * ========================================================================== */
+
+// Состояние кат-сцены «подхода»: от точки A в полутьме до прилавка ларька.
+const cutscene = {
+    t:        0,
+    duration: 5.5,                                    // сек
+    from:     new THREE.Vector3( 1.4, 1.65, 22),      // далеко, сбоку от ларька
+    to:       new THREE.Vector3( 0.0, 1.70,  5),      // прямо перед окном
+    look:     new THREE.Vector3( 0.0, 1.60,  0),      // фокус — окно ларька
+};
+
 function enterGameplay() {
     if (player.mode !== 'cinematic') return;
-    player.mode = 'transition';
 
-    // Скрываем меню (через CSS-transition is-leaving), потом выставляем display:none
+    // 1) Прячем главное меню (CSS-transition выставит opacity → 0)
     dom.menu.classList.add('is-leaving');
     dom.menu.addEventListener('transitionend', () => {
         dom.menu.style.display = 'none';
-        dom.hud.hidden    = false;
-        dom.anger.hidden  = false;
     }, { once: true });
 
-    // Лерпим камеру в позицию игрока за ~1.2 сек
-    const from   = camera.position.clone();
-    const fromQ  = camera.quaternion.clone();
+    // 2) Подписываем нижнюю кат-сцен-плашку «ПОДХОД 1/4»
+    if (dom.caption) {
+        dom.caption.querySelector('.cutscene-caption__day').textContent =
+            `ПОДХОД ${currentDay} / 4`;
+        dom.caption.hidden = false;
+        dom.caption.classList.remove('is-leaving');
+    }
 
-    const tmpCam = new THREE.PerspectiveCamera();
-    tmpCam.position.copy(SPAWN);
-    tmpCam.lookAt(0, 1.6, 0);                  // смотрим на ларёк
-    const toQ = tmpCam.quaternion.clone();
+    // 3) Запускаем кат-сцену в главном цикле (см. updateCutscene)
+    cutscene.t  = 0;
+    player.mode = 'cutscene';
+}
 
-    const DURATION = 1.2;
-    let   t        = 0;
+function updateCutscene(dt) {
+    cutscene.t = Math.min(cutscene.duration, cutscene.t + dt);
+    const k  = cutscene.t / cutscene.duration;
+    // easeInOutQuad — мягкий старт и аккуратное «вкатывание» к ларьку
+    const ke = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
 
-    function step(dt) {
-        t = Math.min(1, t + dt / DURATION);
-        // Easing — easeInOutCubic
-        const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        camera.position.lerpVectors(from, SPAWN, k);
-        camera.quaternion.copy(fromQ).slerp(toQ, k);
+    camera.position.lerpVectors(cutscene.from, cutscene.to, ke);
 
-        if (t < 1) {
-            // продолжим из главного цикла
-            transitionStep = step;
-        } else {
-            transitionStep = null;
-            player.mode = 'fps';
-            controls.lock();
+    // Походка: вертикальный bob + лёгкое покачивание влево-вправо
+    camera.position.y += Math.sin(cutscene.t * 7.5) * 0.045;
+    camera.position.x += Math.sin(cutscene.t * 3.7) * 0.030;
+
+    camera.lookAt(cutscene.look);
+
+    // Финал кат-сцены → прячем подпись, показываем экран запроса pointer-lock
+    if (k >= 1 && player.mode === 'cutscene') {
+        player.mode = 'await-lock';
+        if (dom.caption) {
+            dom.caption.classList.add('is-leaving');
+            setTimeout(() => { dom.caption.hidden = true; }, 500);
+        }
+        if (dom.clickToPlay) {
+            dom.clickToPlay.querySelector('.ctp-title').textContent = 'КЛИКНИ ЧТОБЫ ИГРАТЬ';
+            dom.clickToPlay.hidden = false;
         }
     }
-    transitionStep = step;
 }
-let transitionStep = null;
+
+/* CLICK-TO-PLAY: единственное место, где мы реально вызываем controls.lock()
+ * — внутри handler'а клика, т.е. в живом user-gesture. */
+if (dom.clickToPlay) {
+    dom.clickToPlay.addEventListener('click', () => {
+        // На всякий случай телепортируем камеру точно в SPAWN и нацеливаем на ларёк
+        camera.position.copy(SPAWN);
+        camera.lookAt(0, 1.6, 0);
+
+        dom.clickToPlay.hidden = true;
+        dom.hud.hidden         = false;
+        dom.anger.hidden       = false;
+
+        player.mode = 'fps';
+        controls.lock();
+    });
+}
 
 /* ============================================================================
  *  RAYCAST: взаимодействие «E»
@@ -567,7 +683,9 @@ function endOfDay() {
     currentDay = Math.min(4, currentDay + 1);
     dom.dayValue.textContent = `${currentDay} / 4`;
     setAnger(0);
-    // Возвращаем управление
+
+    // endOfDay вызывается из обработчика клика по кнопке диалога — это живой
+    // user-gesture, поэтому controls.lock() здесь сработает напрямую.
     player.mode = 'fps';
     controls.lock();
 }
@@ -662,9 +780,10 @@ function animate() {
     const t  = clock.elapsedTime;
 
     // 1) Камера
-    if (player.mode === 'cinematic')     updateCinematic(t);
-    else if (transitionStep)             transitionStep(dt);
-    else if (player.mode === 'fps')      updateFPS(dt);
+    if      (player.mode === 'cinematic') updateCinematic(t);
+    else if (player.mode === 'cutscene')  updateCutscene(dt);
+    else if (player.mode === 'fps')       updateFPS(dt);
+    // 'await-lock' и 'dialog' — камера статична, ничего не делаем
 
     // 2) Сцена
     updateRain(dt);
